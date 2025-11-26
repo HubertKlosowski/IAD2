@@ -207,3 +207,4 @@ marimo/_lsp/
 __marimo__/
 *.npy
 *.h5
+Binary_classification/data
