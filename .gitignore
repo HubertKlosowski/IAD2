@@ -208,3 +208,4 @@ __marimo__/
 *.npy
 *.h5
 Binary_classification/data
+Binary_classification/results
