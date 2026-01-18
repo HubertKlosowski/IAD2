@@ -209,3 +209,8 @@ __marimo__/
 *.h5
 */data
 */results
+*/data[A-Z]
+*/mit-bih
+*/nab
+*/figures
+*/cache
