@@ -22,9 +22,9 @@ class Conv1DAE(nn.Module):
         )
 
     def forward(self, x):
-        encoded = self.encoder(x)
-        decoded = self.decoder(encoded)
-        return decoded
+        z = self.encoder(x)
+        x_hat = self.decoder(z)
+        return x_hat, z
 
 
 class DetailPreservingLoss(nn.Module):
@@ -54,7 +54,7 @@ def conv1dae_train(
         alpha: float = 1.0,
         beta: float = 0.5,
         gamma: float = 0.3,
-        device: str = 'cuda'
+        device: str = "cuda"
 ):
     model.train()
     model = model.to(device)
@@ -68,7 +68,7 @@ def conv1dae_train(
         n_batches = data.shape[1]
 
         for batch in data:
-            reconstruction = model(batch)
+            reconstruction, encoder_output = model(batch)
             loss = torch.mean(criterion(reconstruction, batch))
 
             optimizer.zero_grad()
@@ -88,27 +88,25 @@ def detect_anomalies_conv1dae(
         alpha: float = 1.0,
         beta: float = 0.5,
         gamma: float = 0.3,
-        threshold_percentile: int = 95,
-        device='cuda'
+        device: str = "cuda",
 ):
     model.eval()
     model = model.to(device)
 
-    reconstruction_errors, reconstruction = [], []
+    reconstruction_errors, reconstruction, encoder_output = [], [], []
     loss = DetailPreservingLoss(alpha=alpha, beta=beta, gamma=gamma)
 
     with torch.no_grad():
         for sequence in data:
-            seq_reconstruction = model(sequence)
+            seq_reconstruction, seq_encoded = model(sequence)
             validation_loss = loss(seq_reconstruction, sequence)
             seq_errors = validation_loss.cpu().numpy()
 
             reconstruction_errors.append(seq_errors)
             reconstruction.append(torch.squeeze(seq_reconstruction, 1).cpu().numpy())
+            encoder_output.append(torch.squeeze(seq_encoded, 1).cpu().numpy())
 
     reconstruction_errors = np.asarray(reconstruction_errors)
     reconstruction = np.asarray(reconstruction)
-    threshold = np.percentile(reconstruction_errors, threshold_percentile)
-    predictions = np.where(reconstruction_errors > threshold, -1, 1)
 
-    return predictions.squeeze(), reconstruction_errors.squeeze(), threshold, reconstruction
+    return reconstruction_errors.squeeze(), reconstruction, encoder_output

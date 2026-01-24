@@ -7,9 +7,10 @@ import wfdb
 import json
 from joblib import Parallel, delayed
 from collections import Counter
+from numpy.typing import NDArray
 
 
-def sliding_window(data: np.typing.NDArray, window_size: int, overlap: float) -> np.typing.NDArray[float]:
+def sliding_window(data: NDArray, window_size: int, overlap: float) -> NDArray[float]:
     step = int(window_size * (1 - overlap))
     without_nans = [data[i * step:i * step + window_size].tolist() for i in range(0, 2 + (len(data) - window_size) // step)]
     # żeby móc stworzyć np.array muszą być wymiary zgodne, dlatego np.nan
@@ -20,7 +21,7 @@ def sliding_window(data: np.typing.NDArray, window_size: int, overlap: float) ->
 
 
 # Ujednolicenie długości sekwencji
-def trim_to_shortest(arr: list) -> np.typing.NDArray:
+def trim_to_shortest(arr: list) -> NDArray:
     min_length = min([len(_) for _ in arr])
     return np.array([el[:min_length] for el in arr])
 
@@ -77,7 +78,7 @@ def get_bonn_segments(
         bonn_overlap: float = 0.5,
         n_jobs: int = -1,
         is_classical_model: bool = True
-) -> tuple[np.typing.NDArray, np.typing.NDArray, int]:
+) -> tuple[NDArray, NDArray, int]:
     results = Parallel(n_jobs=n_jobs, backend="loky", verbose=0)(
         delayed(process_bonn_sequence)(eeg_bonn_sequence, path, sec, bonn_overlap)
         for path, eeg_bonn_sequence in eeg_bonn_dataset.items()
@@ -149,7 +150,7 @@ def process_twitter_sequence(
         twitter_dataset: pd.DataFrame,
         m: int = 60 * 6,
         twitter_overlap: float = 0.5
-) -> tuple[np.typing.NDArray, np.typing.NDArray]:
+) -> tuple[NDArray, NDArray]:
     frequency_twitter = 1 / 5
     twitter_segments = sliding_window(
         twitter_dataset["value"],
@@ -180,7 +181,7 @@ def get_twitter_segments(
         m: int = 60 * 6,
         twitter_overlap: float = 0.5,
         n_jobs: int = -1
-) -> tuple[np.typing.NDArray, np.typing.NDArray, int]:
+) -> tuple[NDArray, NDArray, int]:
     results = Parallel(n_jobs=n_jobs, backend="loky", verbose=0)(
         delayed(process_twitter_sequence)(twitter_dataset, m, twitter_overlap)
         for twitter_dataset in twitter
@@ -251,7 +252,7 @@ def process_mit_bih_sequence(
         sequence_info,
         sec: float,
         over: float
-) -> tuple[np.typing.NDArray, np.typing.NDArray]:
+) -> tuple[NDArray, NDArray]:
 
     frequency_mit = sequence_info["ann"].fs
 
@@ -284,7 +285,7 @@ def get_mit_bih_segments(
         sec: int = 2,
         mit_bih_overlap: float = 0.5,
         n_jobs: int = -1
-) -> tuple[np.typing.NDArray, np.typing.NDArray, int]:
+) -> tuple[NDArray, NDArray, int]:
     results = Parallel(n_jobs=n_jobs, backend='loky', verbose=0)(
         delayed(process_mit_bih_sequence)(seq_info, sec, mit_bih_overlap)
         for seq_info in mit_bih

@@ -5,11 +5,12 @@ import optuna
 import numpy as np
 from Conv1DAE import Conv1DAE, conv1dae_train, detect_anomalies_conv1dae
 import pandas as pd
+from numpy.typing import NDArray
 
 
 def optimize_conv1dae(
-        X: np.typing.NDArray,
-        y: np.typing.NDArray,
+        X: NDArray,
+        y: NDArray,
         latent: int,
         dataset_name: str,
         show_optuna_output: bool = False,
@@ -19,10 +20,10 @@ def optimize_conv1dae(
 
     def define_conv1dae(trial: optuna.Trial) -> tuple[dict, dict]:
         params = {
-            "alpha": trial.suggest_float("alpha", 0.3, 1.0),
-            "beta": trial.suggest_float("beta", 0.3, 0.75),
-            "gamma": trial.suggest_float("gamma", 0.3, 0.8),
-            "lr": trial.suggest_float("lr", 1e-4, 1e-2, log=True),
+            "alpha": trial.suggest_float("alpha", 1.5, 2.0),
+            "beta": trial.suggest_float("beta", 0.1, 0.4),
+            "gamma": trial.suggest_float("gamma", 1.0, 1.5),
+            "lr": trial.suggest_float("lr", 1e-3, 1e-1, log=True),
             "epochs": trial.suggest_int("epochs", 25, 50)
         }
 
@@ -33,7 +34,8 @@ def optimize_conv1dae(
 
     def objective(trial: optuna.Trial):
         kf = KFold(n_splits=2, shuffle=False)
-        scores = []
+        reconstruction_errors = []
+
         for i, (train_index, val_index) in enumerate(kf.split(X=X, y=y)):
             x_train, x_test = X[train_index], X[val_index]
 
@@ -51,15 +53,16 @@ def optimize_conv1dae(
             train_params, loss_params = define_conv1dae(trial)
             conv1dae = Conv1DAE(input_dim=1, latent_dim=latent)
             conv1dae_train(model=conv1dae, data=x_train, **train_params)
-            y_pred, y_scores, _, reconstruction = detect_anomalies_conv1dae(model=conv1dae, data=x_test, **loss_params)
-            score_top_percentile = np.percentile(y_scores, percentile)
-            scores.append(-score_top_percentile)
 
-        return np.mean(scores)
+            errors, _, _ = detect_anomalies_conv1dae(conv1dae, x_test, **loss_params)
+            reconstruction_errors.extend(errors)
+
+        score = np.percentile(reconstruction_errors, percentile)
+        return score
 
     study = optuna.create_study(
-        study_name=f"Optuna for LSTMAE on {dataset_name} dataset",
-        direction="maximize",
+        study_name=f"Optuna for Conv1DAE on {dataset_name} dataset",
+        direction="minimize",
         sampler=optuna.samplers.TPESampler(seed=42)
     )
 
@@ -76,7 +79,7 @@ def train_test_split_anomaly_sequence(
         test_size: float = 0.3,
         random_state: int = 42,
         epsilon: float = 0.1,
-        pseudo_label: np.typing.NDArray = None
+        pseudo_label: NDArray = None
 ):
     np.random.seed(random_state)
     num_seq = X.shape[0]
@@ -129,7 +132,7 @@ def train_test_split_anomaly_sequence(
         y_train = y_train[normal_mask_train]
 
     if X.ndim == 3:
-        normal_mask_train = (y_train == 1).all(axis=-1)
+        normal_mask_train = (y_train == 1).mean(axis=-1) >= 0.7
         X_test = np.concatenate([X_test, X_train[~normal_mask_train]], axis=0)
         y_test = np.concatenate([y_test, y_train[~normal_mask_train]], axis=0)
         X_train = X_train[normal_mask_train]
@@ -138,7 +141,7 @@ def train_test_split_anomaly_sequence(
     return X_train, X_test, y_train, y_test
 
 
-def find_anomaly_ranges(arr: np.typing.NDArray):
+def find_anomaly_ranges(arr: NDArray):
     anomaly_indices = np.where(arr == -1)[0]
     if len(anomaly_indices) == 0:
         return []
@@ -151,7 +154,7 @@ def ranges_overlap(start1, end1, start2, end2):
     return not (end1 < start2 or end2 < start1)
 
 
-def latency_to_detection(y_true: np.typing.NDArray, y_pred: np.typing.NDArray) -> dict:
+def latency_to_detection(y_true: NDArray, y_pred: NDArray) -> dict:
     all_latencies = []
 
     for labels_pred, labels_true in zip(y_pred, y_true):
@@ -186,9 +189,9 @@ def latency_to_detection(y_true: np.typing.NDArray, y_pred: np.typing.NDArray) -
 
 
 def get_basic_metrics(
-        y_true: np.typing.NDArray,
-        y_pred: np.typing.NDArray,
-        y_scores: np.typing.NDArray
+        y_true: NDArray,
+        y_pred: NDArray,
+        y_scores: NDArray
 ) -> dict:
     labels = [-1, 1]
     pos_label = -1
@@ -207,9 +210,9 @@ def get_basic_metrics(
     }
 
 
-def convert_3d_to_2d(data: np.typing.NDArray) -> np.typing.NDArray:
+def convert_3d_to_2d(data: NDArray) -> NDArray:
     return data.reshape(-1, data.shape[-1])
 
 
-def convert_2d_to_1d(data: np.typing.NDArray) -> np.typing.NDArray:
+def convert_2d_to_1d(data: NDArray) -> NDArray:
     return data.reshape(-1)
