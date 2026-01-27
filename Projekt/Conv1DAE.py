@@ -5,21 +5,30 @@ import numpy as np
 
 
 class Conv1DAE(nn.Module):
-
-    def __init__(self, input_dim: int = 1, latent_dim: int = 8, device='cuda', *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, input_dim: int = 1, latent_dim: int = 8, device="cuda"):
+        super().__init__()
         self.input_dim = input_dim
         self.latent_dim = latent_dim
+        self.device = device
 
         self.encoder = nn.Sequential(
-            nn.Conv1d(input_dim, latent_dim, 11, stride=1, padding=1, device=device),
+            nn.Conv1d(input_dim, 8, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm1d(8),
             nn.ReLU(),
-            nn.MaxPool1d(2, stride=2, ceil_mode=False),
-        )
+            nn.MaxPool1d(kernel_size=2, stride=2),
+
+            nn.Conv1d(8, latent_dim, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm1d(latent_dim),
+            nn.ReLU(),
+            nn.MaxPool1d(kernel_size=2, stride=2),
+        ).to(device)
 
         self.decoder = nn.Sequential(
-            nn.ConvTranspose1d(latent_dim, input_dim, 11, stride=2, padding=1, output_padding=1, device=device)
-        )
+            nn.ConvTranspose1d(latent_dim, 8, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm1d(8),
+            nn.ReLU(),
+            nn.ConvTranspose1d(8, input_dim, kernel_size=3, stride=2, padding=1, output_padding=1),
+        ).to(device)
 
     def forward(self, x):
         z = self.encoder(x)
